@@ -198,6 +198,7 @@ dist
 node_modules
 
 *.sublime*
+bin/
 
 psd
 thumb

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50" x-data="downloadApp()">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Video Downloader</title>
+		<script
+			src="https://unpkg.com/alpinejs@3.12.0/dist/cdn.min.js"
+			defer></script>
+		<script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+		<link
+			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+			rel="stylesheet" />
+		<script src="https://cdn.tailwindcss.com"></script>
+	</head>
+	<body class="h-full">
+		<nav class="bg-white shadow-sm">
+			<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+				<div class="flex h-16 justify-between items-center">
+					<div class="flex items-center">
+						<i class="fas fa-cloud-download-alt text-indigo-600 text-2xl"></i>
+						<span class="ml-2 text-xl font-semibold">Video Downloader</span>
+					</div>
+					<div class="flex items-center space-x-4">
+						<span class="text-sm text-gray-500">
+							Active Downloads:
+							<span class="font-semibold" x-text="activeDownloads"></span>
+						</span>
+					</div>
+				</div>
+			</div>
+		</nav>
+
+		<main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+			<!-- URL Input Form -->
+			<div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+				<form @submit.prevent="startDownload" class="space-y-4">
+					<div>
+						<label for="url" class="block text-sm font-medium text-gray-700"
+							>Video URL</label
+						>
+						<div class="mt-2 flex rounded-md shadow-sm">
+							<input
+								type="url"
+								id="url"
+								x-model="url"
+								@input="validateURL"
+								class="block w-full rounded-l-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+								placeholder="https://www.youtube.com/watch?v=..."
+								required />
+							<button
+								type="submit"
+								:disabled="!isValidURL || activeDownloads > 0"
+								class="relative -ml-px inline-flex items-center gap-x-1.5 rounded-r-md px-6 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed">
+								<i class="fas fa-download"></i>
+								<span>Download</span>
+							</button>
+						</div>
+					</div>
+					<p
+						x-show="!isValidURL && url.length > 0"
+						class="mt-2 text-sm text-red-600">
+						Please enter a valid URL.
+					</p>
+				</form>
+			</div>
+
+			<!-- Active Downloads -->
+			<div class="space-y-4">
+				<template x-for="download in downloads" :key="download.id">
+					<div class="bg-white rounded-lg shadow-sm p-6">
+						<div class="flex items-center justify-between mb-4">
+							<div>
+								<h3
+									class="text-sm font-medium text-gray-900 truncate"
+									x-text="download.url"></h3>
+								<p
+									class="text-sm text-gray-500 mt-1"
+									x-text="download.status"></p>
+							</div>
+						</div>
+						<div class="w-full bg-gray-200 rounded-full h-2">
+							<div
+								class="progress-bar bg-indigo-600 h-2 rounded-full transition-all duration-300"
+								:style="`width: ${download.progress}%`"></div>
+						</div>
+						<div class="mt-2 flex justify-between text-sm">
+							<span
+								class="text-gray-500"
+								x-text="`${download.progress}%`"></span>
+						</div>
+					</div>
+				</template>
+			</div>
+
+			<!-- Completed Downloads -->
+			<div class="mt-8">
+				<h2 class="text-lg font-medium text-gray-900 mb-4">
+					Completed Downloads
+				</h2>
+				<div class="space-y-4">
+					<template x-for="download in completedDownloads" :key="download.id">
+						<div class="bg-white rounded-lg shadow-sm p-6">
+							<div class="flex justify-between">
+								<div>
+									<h3
+										class="text-sm font-medium text-gray-900 truncate"
+										x-text="download.url"></h3>
+									<p class="text-sm text-gray-500 mt-1">Completed</p>
+								</div>
+								<button
+									@click="saveToDevice(download)"
+									class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none">
+									<i class="fas fa-download"></i>
+									<span>Save to Device</span>
+								</button>
+							</div>
+						</div>
+					</template>
+				</div>
+			</div>
+		</main>
+
+		<script>
+			document.addEventListener('alpine:init', () => {
+				Alpine.data('downloadApp', () => ({
+					url: '',
+					isValidURL: false,
+					downloads: [],
+					completedDownloads: [],
+					activeDownloads: 0,
+
+					validateURL() {
+						const urlRegex = /https?:\/\/.+/; // Update to match specific platforms
+						this.isValidURL = urlRegex.test(this.url);
+					},
+
+					async startDownload() {
+						this.activeDownloads++;
+						const id = Date.now();
+						this.downloads.push({
+							id,
+							url: this.url,
+							progress: 0,
+							status: 'downloading',
+						});
+
+						try {
+							const response = await fetch('/api/download/start', {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify({ url: this.url }),
+							});
+
+							if (!response.ok) throw new Error('Failed to start download');
+
+							const { id: downloadId } = await response.json();
+
+							// Poll for download progress
+							const interval = setInterval(async () => {
+								const statusRes = await fetch(
+									`/api/download/status?id=${downloadId}`
+								);
+								const statusData = await statusRes.json();
+
+								const download = this.downloads.find((d) => d.id === id);
+								if (!download) return clearInterval(interval);
+
+								download.progress = statusData.progress;
+								download.status = statusData.status;
+
+								if (statusData.status === 'completed') {
+									clearInterval(interval);
+									this.completedDownloads.push(download);
+									this.downloads = this.downloads.filter((d) => d.id !== id);
+									this.activeDownloads--;
+								}
+							}, 1000);
+						} catch (error) {
+							console.error(error);
+							alert('Error starting download. Please try again.');
+							this.activeDownloads--;
+						}
+					},
+
+					async saveToDevice(download) {
+						try {
+							const response = await fetch(
+								`/api/download/save?id=${download.id}`
+							);
+							if (!response.ok) throw new Error('Failed to fetch file');
+
+							const blob = await response.blob();
+							const url = window.URL.createObjectURL(blob);
+							const link = document.createElement('a');
+							link.href = url;
+							link.download = 'video.mp4'; // Adjust filename dynamically if needed
+							link.click();
+							window.URL.revokeObjectURL(url);
+						} catch (error) {
+							console.error(error);
+							alert('Error saving file. Please try again.');
+						}
+					},
+				}));
+			});
+		</script>
+	</body>
+</html>
