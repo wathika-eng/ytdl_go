@@ -41,6 +41,7 @@ func main() {
 		http.FileServer(http.FS(templatesSubFS)).ServeHTTP(w, r)
 	})
 
+	http.HandleFunc("/api/download/test", handlers.TestAPI)
 	http.HandleFunc("/api/download/start", handlers.HandleStartDownload)
 	http.HandleFunc("/api/download/pause", handlers.HandlePauseDownload)
 	http.HandleFunc("/api/download/resume", handlers.HandlePauseDownload)

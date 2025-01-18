@@ -19,6 +19,20 @@ var downloadManager = &manager.DownloadManager{
 	Downloads: make(map[string]*manager.Download),
 }
 
+func TestAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	response := map[string]string{
+		"message": "Hello, this is for testing our API!",
+		"status":  "success",
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
 func HandleSaveToDevice(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" || !validURL(id) {
